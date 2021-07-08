@@ -1,15 +1,51 @@
 version: '2.1'
 
-services:
+volumes:
+  zeebe_data:
+  zeebe_elasticsearch_data:
 
+networks:
+  zeebe_network:
+    driver: bridge
+
+services:
+  zeebe:
+    container_name: zeebe
+    image: camunda/zeebe:1.0.1
+    environment:
+      - ZEEBE_LOG_LEVEL=debug
+    ports:
+      - "26500:26500"
+      - "9600:9600"
+      - "5701:5701"
+    volumes:
+      - ./lib/zeebe-hazelcast-exporter-1.0.0.jar:/usr/local/zeebe/exporters/zeebe-hazelcast-exporter-1.0.0.jar
+      - ./application.yaml:/usr/local/zeebe/config/application.yaml
+      - ../workflows:/usr/local/zeebe/workflows
+    networks:
+      - zeebe_network
+  operate:
+    container_name: operate
+    image: camunda/operate:1.0.1
+    ports:
+      - "8090:8080"
+    volumes:
+      - ./operate-application.yaml:/usr/local/operate/config/application.yml
+    networks:
+      - zeebe_network
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.8.3
+    container_name: elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.13.2
     ports:
       - "9200:9200"
     environment:
       - discovery.type=single-node
       - cluster.name=elasticsearch
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - zeebe_elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - zeebe_network
 
   zookeeper:
     image: zookeeper:3.4.9
@@ -20,7 +56,8 @@ services:
     environment:
       ZOO_PORT: 2181
       ZOO_SERVERS: server.1=zookeeper:2888:3888
-
+    networks:
+      - zeebe_network
   kafka:
     image: confluentinc/cp-enterprise-kafka:5.3.0
     hostname: kafka
@@ -39,7 +76,8 @@ services:
       KAFKA_CONFLUENT_METRICS_REPORTER_ZOOKEEPER_CONNECT: "zookeeper:2181"
     depends_on:
       - zookeeper
-
+    networks:
+      - zeebe_network
   schema-registry:
     image: confluentinc/cp-schema-registry:5.3.0
     hostname: schema-registry
@@ -52,7 +90,8 @@ services:
     depends_on:
       - zookeeper
       - kafka
-
+    networks:
+      - zeebe_network
   connect:
     image: confluentinc/cp-kafka-connect:5.3.0
     hostname: connect
@@ -83,7 +122,8 @@ services:
     depends_on:
       - schema-registry
       - kafka
-
+    networks:
+      - zeebe_network
   control-center:
     image: confluentinc/cp-enterprise-control-center:5.3.0
     hostname: control-center
@@ -100,3 +140,5 @@ services:
       - schema-registry
       - kafka
       - connect
+    networks:
+      - zeebe_network

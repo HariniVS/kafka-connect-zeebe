@@ -8,7 +8,7 @@ flow-retail: workflow source sink
 .PHONY: workflow
 workflow:
 	docker cp $(SELF_DIR)/order.bpmn $(shell docker-compose -f $(DOCKER_FILE) ps -q zeebe):/tmp/order.bpmn && \
-	docker-compose -f $(DOCKER_FILE) exec zeebe zbctl deploy /tmp/order.bpmn
+	docker-compose -f $(DOCKER_FILE) exec zeebe zbctl --insecure deploy /tmp/order.bpmn
 
 .PHONY: source
 source:
@@ -21,13 +21,19 @@ sink:
 .PHONY: order
 order:
 	@ORDER_ID=$(or $(ORDER_ID), $(shell read -p "Order ID: " orderId; echo $$orderId)); \
-	docker-compose -f $(DOCKER_FILE) exec zeebe zbctl create instance --variables "{\"orderId\": $$ORDER_ID}" order
+	docker-compose -f $(DOCKER_FILE) exec zeebe zbctl --insecure create instance --variables "{\"orderId\": $$ORDER_ID}" order
 
 .PHONY: logger
 logger:
 	cd $(ROOT_DIR) && \
 	docker-compose -f $(DOCKER_FILE) exec zeebe /bin/bash -c \
-		"zbctl create worker --handler cat --maxJobsActive 1 payment-requested & zbctl create worker --handler cat --maxJobsActive 1 payment-confirmed"
+		"zbctl --insecure create worker --handler cat --maxJobsActive 1 payment-requested"
+
+.PHONY: loggerConfirm
+loggerConfirm:
+	cd $(ROOT_DIR) && \
+	docker-compose -f $(DOCKER_FILE) exec zeebe /bin/bash -c \
+		"zbctl --insecure create worker --handler cat --maxJobsActive 1 payment-confirmed"
 
 .PHONY: payment
 payment:
